@@ -24,4 +24,4 @@ open kernel-sim.html
 ## Tech Stack
 `HTML5` · `CSS3` · `Vanilla JavaScript` · `Chart.js` · `GSAP`
 
-> Developed for CS-OS-LAB Mini Project (MP6) | AY 2025–26
+> Developed by Arun Sam, Paul & Jacob | Don Bosco Institute of Technology, Mumbai | CS-OS-LAB Mini Project (MP6) | AY 2025–26
