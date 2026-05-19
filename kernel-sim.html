@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mini OS Kernel Simulator</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet">
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+  <!-- Chart.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+  <!-- GSAP (animations) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+
+  <!-- Our stylesheet -->
+  <link rel="stylesheet" href="kernel-sim.css">
+</head>
+<body>
+
+<!-- ── PARTICLES BACKGROUND ── -->
+<canvas id="particles-canvas"></canvas>
+
+<!-- ══════════════════════════════════════════════════
+     BOOT SCREEN
+     ══════════════════════════════════════════════════ -->
+<div id="boot-screen">
+  <div class="boot-logo">KERNEL SIM</div>
+  <div class="boot-sub">// MINI OS KERNEL SIMULATOR v2.1.0 //</div>
+  <div class="boot-bar-wrap"><div class="boot-bar"></div></div>
+  <div class="boot-log" id="boot-log"></div>
+</div>
+
+<!-- ── TOAST NOTIFICATIONS ── -->
+<div class="notif-wrap" id="notif-wrap"></div>
+
+<!-- ══════════════════════════════════════════════════
+     MAIN APPLICATION
+     ══════════════════════════════════════════════════ -->
+<div id="app">
+
+  <!-- ── TOP NAVIGATION BAR ── -->
+  <nav class="topnav">
+    <div>
+      <div class="topnav-brand">⬡ KERNEL SIM</div>
+      <div class="topnav-subtitle">// Interactive OS Core Subsystem Visualization</div>
+    </div>
+    <div class="topnav-spacer"></div>
+    <div class="status-chip">
+      <div class="status-dot"></div> KERNEL ONLINE
+    </div>
+    <div class="status-chip">
+      <i class="fa-solid fa-microchip"></i> CPU
+      <div class="cpu-bar-mini">
+        <div class="cpu-bar-mini-fill" id="topnav-cpu" style="width:0%"></div>
+      </div>
+      <span id="topnav-cpu-val">0%</span>
+    </div>
+    
+    <div class="status-chip">
+      <i class="fa-solid fa-memory"></i> MEM <span id="topnav-mem">0%</span>
+    </div>
+    <div class="time-display" id="clock">00:00:00</div>
+  </nav>
+
+  <!-- ── BODY (sidebar + content) ── -->
+  <div class="app-body">
+
+    <!-- ── LEFT SIDEBAR ── -->
+    <aside class="sidebar">
+      <div class="sidebar-section-label">System</div>
+      <div class="nav-item active" onclick="switchView('overview',this)">
+        <i class="fa-solid fa-gauge-high"></i> Overview
+      </div>
+      <div class="nav-item" onclick="switchView('simulation',this)">
+        <i class="fa-solid fa-play-circle"></i> Simulation Flow
+      </div>
+
+      <div class="sidebar-section-label">Modules</div>
+      <div class="nav-item" onclick="switchView('process',this)">
+        <i class="fa-solid fa-diagram-project"></i> Process Mgmt
+        <span class="nav-badge" id="badge-proc">0</span>
+      </div>
+      <div class="nav-item" onclick="switchView('queue',this)">
+        <i class="fa-solid fa-layer-group"></i> Ready Queue
+      </div>
+      <div class="nav-item" onclick="switchView('scheduler',this)">
+        <i class="fa-solid fa-calendar-check"></i> CPU Scheduler
+      </div>
+      <div class="nav-item" onclick="switchView('memory',this)">
+        <i class="fa-solid fa-server"></i> Memory
+      </div>
+      <div class="nav-item" onclick="switchView('filesystem',this)">
+        <i class="fa-solid fa-folder-open"></i> File System
+      </div>
+
+      <div class="sidebar-section-label">Diagnostics</div>
+      <div class="nav-item" onclick="switchView('logger',this)">
+        <i class="fa-solid fa-terminal"></i> Event Logger
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-stat">Active: <span id="sb-proc">0</span></div>
+        <div class="sidebar-stat">Waiting: <span id="sb-waiting">0</span></div>
+        <div class="sidebar-stat">Mem Free: <span id="sb-mem">1024</span> MB</div>
+        <div class="sidebar-stat">Files: <span id="sb-files">0</span></div>
+        <div class="sidebar-stat">Uptime: <span id="sb-uptime">0s</span></div>
+      </div>
+    </aside>
+
+    <!-- ── MAIN CONTENT AREA ── -->
+    <main class="main-content">
+
+      <!-- ══════════════════════════════════════════
+           VIEW: OVERVIEW
+           ══════════════════════════════════════════ -->
+      <div class="view active" id="view-overview">
+
+        <!-- KPI Cards -->
+        <div class="grid-5">
+          <div class="stat-card">
+            <div class="stat-label">TOTAL PROCESSES</div>
+            <div class="stat-value" id="ov-procs">0</div>
+            <div class="stat-sub">In system</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">WAITING (I/O)</div>
+            <div class="stat-value" style="color:var(--neon-yellow)" id="ov-waiting">0</div>
+            <div class="stat-sub">Blocked on I/O</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">CPU UTILIZATION</div>
+            <div class="stat-value" id="ov-cpu">0<span style="font-size:.8rem">%</span></div>
+            <div class="stat-sub">Scheduler active</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">MEMORY USED</div>
+            <div class="stat-value" id="ov-mem">0<span style="font-size:.8rem">MB</span></div>
+            <div class="stat-sub">of 1024 MB</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">FILES STORED</div>
+            <div class="stat-value" id="ov-files">0</div>
+            <div class="stat-sub">Virtual FS</div>
+          </div>
+        </div>
+
+        <!-- Charts row -->
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-header">
+              <i class="fa-solid fa-microchip panel-icon"></i>
+              <span class="panel-title">CPU MONITOR</span>
+            </div>
+            <div class="panel-body">
+              <div style="display:flex;gap:20px;align-items:center;">
+                <div class="cpu-ring-wrap">
+                  <div class="cpu-ring">
+                    <svg viewBox="0 0 120 120">
+                      <circle class="cpu-ring-bg"   cx="60" cy="60" r="54"/>
+                      <circle class="cpu-ring-fill" id="cpu-ring-fill" cx="60" cy="60" r="54"/>
+                    </svg>
+                    <div class="cpu-ring-text">
+                      <span id="cpu-ring-val">0%</span>
+                      <span class="cpu-ring-label">CPU USAGE</span>
+                    </div>
+                  </div>
+                </div>
+                <div style="flex:1;">
+                  <div class="canvas-wrap" style="height:120px;">
+                    <canvas id="cpu-chart"></canvas>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <i class="fa-solid fa-memory panel-icon"></i>
+              <span class="panel-title">MEMORY OVERVIEW</span>
+            </div>
+            <div class="panel-body">
+              <div class="canvas-wrap" style="height:120px;"><canvas id="mem-chart"></canvas></div>
+              <div class="flex-row" style="margin-top:10px;">
+                <span class="text-dim">Used: <span class="text-neon" id="ov-mem2">0 MB</span></span>
+                <span class="text-dim">Free: <span class="text-green" id="ov-free">1024 MB</span></span>
+                <span class="text-dim">Frag: <span class="text-red" id="ov-frag">0%</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live feed -->
+        <div class="panel">
+          <div class="panel-header">
+            <i class="fa-solid fa-bolt panel-icon"></i>
+            <span class="panel-title">LIVE EVENT FEED</span>
+          </div>
+          <div class="panel-body">
+            <div class="log-terminal" id="ov-log"></div>
+          </div>
+        </div>
+
+      </div><!-- /view-overview -->
+
+
+      <!-- ══════════════════════════════════════════
+           VIEW: SIMULATION FLOW
+           ══════════════════════════════════════════ -->
+      <div class="view" id="view-simulation">
+
+        <div class="panel">
+          <div class="panel-header">
+            <i class="fa-solid fa-play-circle panel-icon"></i>
+            <span class="panel-title">INTER-SUBSYSTEM SIMULATION FLOW</span>
+          </div>
+          <div class="panel-body">
+            <p style="font-family:'Share Tech Mono';font-size:.7rem;color:var(--text-secondary);margin-bottom:16px;">
+              Demonstrates the exact 5-step OS interaction chain from the lab manual:
+              Process creation → Scheduling → I/O → Completion → File read.
+              Click <strong style="color:var(--neon-blue)">Run Full Simulation</strong> to watch all subsystems interact in sequence.
+            </p>
+            <div class="flex-row" style="margin-bottom:20px;">
+              <button class="btn btn-success" onclick="runSimulationFlow()">
+                <i class="fa-solid fa-play"></i> Run Full Simulation
+              </button>
+              <button class="btn btn-primary" onclick="resetSimulation()">
+                <i class="fa-solid fa-rotate-right"></i> Reset
+              </button>
+            </div>
+
+            <!-- 5 Steps -->
+            <div id="sim-steps">
+
+              <div class="sim-step" id="sim-step-1">
+                <div class="sim-step-num">1</div>
+                <div class="sim-step-content">
+                  <div class="sim-step-title">PROCESS CREATION</div>
+                  <div class="sim-step-desc">Process Manager creates PCB → Memory Manager allocates RAM → Ready Queue enqueues process</div>
+                  <div class="sim-step-badge" id="sim-badge-1" style="display:none;"></div>
+                </div>
+                <i class="fa-solid fa-circle-notch" id="sim-icon-1" style="color:var(--text-dim);margin-top:2px;"></i>
+              </div>
+
+              <div class="sim-step" id="sim-step-2">
+                <div class="sim-step-num">2</div>
+                <div class="sim-step-content">
+                  <div class="sim-step-title">SCHEDULER DISPATCH</div>
+                  <div class="sim-step-desc">Scheduler dequeues process → transitions state to Running → starts execution timer</div>
+                  <div class="sim-step-badge" id="sim-badge-2" style="display:none;"></div>
+                </div>
+                <i class="fa-solid fa-circle-notch" id="sim-icon-2" style="color:var(--text-dim);margin-top:2px;"></i>
+              </div>
+
+              <div class="sim-step" id="sim-step-3">
+                <div class="sim-step-num">3</div>
+                <div class="sim-step-content">
+                  <div class="sim-step-title">I/O FILE WRITE → WAITING STATE</div>
+                  <div class="sim-step-desc">Process issues file write → transitions to WAITING → File System allocates inode + data blocks → I/O completes → back to READY</div>
+                  <div class="sim-step-badge" id="sim-badge-3" style="display:none;"></div>
+                </div>
+                <i class="fa-solid fa-circle-notch" id="sim-icon-3" style="color:var(--text-dim);margin-top:2px;"></i>
+              </div>
+
+              <div class="sim-step" id="sim-step-4">
+                <div class="sim-step-num">4</div>
+                <div class="sim-step-content">
+                  <div class="sim-step-title">PROCESS TERMINATION</div>
+                  <div class="sim-step-desc">Scheduler marks process TERMINATED → Memory Manager frees allocated RAM blocks</div>
+                  <div class="sim-step-badge" id="sim-badge-4" style="display:none;"></div>
+                </div>
+                <i class="fa-solid fa-circle-notch" id="sim-icon-4" style="color:var(--text-dim);margin-top:2px;"></i>
+              </div>
+
+              <div class="sim-step" id="sim-step-5">
+                <div class="sim-step-num">5</div>
+                <div class="sim-step-content">
+                  <div class="sim-step-title">FILE READ REQUEST</div>
+                  <div class="sim-step-desc">File System reads data blocks → returns content → inode access logged</div>
+                  <div class="sim-step-badge" id="sim-badge-5" style="display:none;"></div>
+                </div>
+                <i class="fa-solid fa-circle-notch" id="sim-icon-5" style="color:var(--text-dim);margin-top:2px;"></i>
+              </div>
+
+            </div><!-- /sim-steps -->
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <i class="fa-solid fa-terminal panel-icon"></i>
+            <span class="panel-title">SIMULATION LOG</span>
+          </div>
+          <div class="panel-body">
+            <div class="log-terminal" id="sim-log" style="height:200px;"></div>
+          </div>
+        </div>
+
+      </div><!-- /view-simulation -->
+
+
+      <!-- ══════════════════════════════════════════
+           VIEW: PROCESS MANAGEMENT
+           ══════════════════════════════════════════ -->
+      <div class="view" id="view-process">
+
+        <div class="grid-2">
+          <!-- Create form -->
+          <div class="panel">
+            <div class="panel-header">
+              <i class="fa-solid fa-plus panel-icon"></i>
+              <span class="panel-title">CREATE PROCESS</span>
+            </div>
+            <div class="panel-body">
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Process Name</label>
+                  <input class="form-control" id="proc-name" placeholder="proc_name" value="process">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Priority (1=High)</label>
+                  <input class="form-control" id="proc-prio" type="number" min="1" max="10" value="5">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Burst Time (ms)</label>
+                  <input class="form-control" id="proc-burst" type="number" min="1" max="50" value="10">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Memory (MB)</label>
+                  <input class="form-control" id="proc-mem" type="number" min="8" max="256" value="64">
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">I/O Trigger Tick (0 = none)</label>
+                <input class="form-control" id="proc-io" type="number" min="0" max="49" value="0" placeholder="Burst tick to trigger I/O wait">
+              </div>
+              <div class="flex-row" style="margin-top:8px;">
+                <button class="btn btn-primary" onclick="createProcess()">
+                  <i class="fa-solid fa-plus"></i> Create
+                </button>
+                <button class="btn btn-success" onclick="autoDemo()">
+                  <i class="fa-solid fa-magic"></i> Auto Demo
+                </button>
+                <button class="btn btn-danger btn-sm" onclick="clearTerminated()">
+                  <i class="fa-solid fa-trash"></i> Clear Done
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Stats -->
+          <div class="panel">
+            <div class="panel-header">
+              <i class="fa-solid fa-chart-bar panel-icon"></i>
+              <span class="panel-title">PROCESS STATISTICS</span>
+            </div>
+            <div class="panel-body">
+              <div class="grid-2">
+                <div class="stat-card">
+                  <div class="stat-label">TOTAL</div>
+                  <div class="stat-value" style="font-size:1.2rem" id="ps-total">0</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-label">RUNNING</div>
+                  <div class="stat-value" style="font-size:1.2rem;color:var(--neon-green)" id="ps-running">0</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-label">WAITING (I/O)</div>
+                  <div class="stat-value" style="font-size:1.2rem;color:var(--neon-yellow)" id="ps-waiting">0</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-label">TERMINATED</div>
+                  <div class="stat-value" style="font-size:1.2rem;color:var(--electric-red)" id="ps-term">0</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PCB Table -->
+        <div class="panel">
+          <div class="panel-header">
+            <i class="fa-solid fa-table panel-icon"></i>
+            <span class="panel-title">PROCESS TABLE (PCB)</span>
+          </div>
+          <div class="panel-body" style="padding:0;">
+            <div style="overflow-x:auto;">
+              <table class="proc-table">
+                <thead>
+                  <tr>
+                    <th>PID</th><th>NAME</th><th>PRIO</th><th>ARRIVAL</th>
+                    <th>BURST</th><th>REM.</th><th>MEM</th><th>I/O AT</th><th>STATE</th><th>ACTION</th>
+                  </tr>
+                </thead>
+                <tbody id="proc-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /view-process -->
+
+
+      <!-- ══════════════════════════════════════════
+           VIEW: READY QUEUE
+           ══════════════════════════════════════════ -->
+      <div class="view" id="view-queue">
+
+        <div class="grid-3">
+          <div class="stat-card">
+            <div class="stat-label">READY QUEUE LENGTH</div>
+            <div class="stat-value" id="q-len">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">WAITING QUEUE LENGTH</div>
+            <div class="stat-value" style="color:var(--neon-yellow)" id="wq-len">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">THROUGHPUT</div>
+            <div class="stat-value" id="q-thru">0</div>
+            <div class="stat-sub">processes/min</div>
+          </div>
+        </div>
+
+        <!-- Ready Queue -->
+        <div class="panel">
+          <div class="panel-header">
+            <i class="fa-solid fa-layer-group panel-icon"></i>
+            <span class="panel-title">READY QUEUE — FIFO / Priority</span>
+          </div>
+          <div class="panel-body">
+            <div class="text-dim" style="margin-bottom:10px;">
+              HEAD ─────────────────────────────────────────────── TAIL
+            </div>
+            <div class="queue-wrap" id="queue-display">
+              <span class="text-dim">Queue is empty</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Waiting Queue -->
+        <div class="panel">
+          <div class="panel-header">
+            <i class="fa-solid fa-clock panel-icon" style="color:var(--neon-yellow)"></i>
+            <span class="panel-title" style="color:var(--neon-yellow);">WAITING QUEUE — I/O Blocked</span>
+          </div>
+          <div class="panel-body">
+            <div class="text-dim" style="margin-bottom:10px;">
+              Processes blocked on I/O — return to READY when I/O completes
+            </div>
+            <div class="queue-wrap" id="waiting-display">
+              <span class="text-dim">No blocked processes</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- History log -->
+        <div class="panel">
+          <div class="panel-header">
+            <i class="fa-solid fa-clock-rotate-left panel-icon"></i>
+            <span class="panel-title">QUEUE HISTORY</span>
+          </div>
+          <div class="panel-body">
+            <div class="log-terminal" id="queue-log"></div>
+          </div>
+        </div>
+
+      </div><!-- /view-queue -->
+
+
+      <!-- ══════════════════════════════════════════
+           VIEW: CPU SCHEDULER
+           ══════════════════════════════════════════ -->
+      <div class="view" id="view-scheduler">
+
+        <!-- Config & Control -->
+        <div class="panel">
+          <div class="panel-header">
+            <i class="fa-solid fa-gear panel-icon"></i>
+            <span class="panel-title">SCHEDULER CONFIG &amp; CONTROL</span>
+          </div>
+          <div class="panel-body">
+            <div class="flex-row" style="gap:24px;flex-wrap:wrap;">
+
+              <div>
+                <div class="form-label" style="margin-bottom:8px;">ALGORITHM</div>
+                <div class="algo-toggle">
+                  <button class="algo-btn selected" id="algo-rr"   onclick="setAlgo('rr')">Round Robin</button>
+                  <button class="algo-btn"           id="algo-prio" onclick="setAlgo('priority')">Priority (Preemptive)</button>
+                </div>
+              </div>
+
+              <div id="quantum-section">
+                <div class="form-label" style="margin-bottom:8px;">TIME QUANTUM</div>
+                <div class="quantum-wrap">
+                  <button class="btn btn-sm btn-danger"  onclick="changeQuantum(-1)">−</button>
+                  <div class="quantum-val" id="quantum-display">4</div>
+                  <button class="btn btn-sm btn-primary" onclick="changeQuantum(1)">+</button>
+                </div>
+              </div>
+
+              <div class="sched-ctrl" style="flex:1;">
+                <button class="btn btn-success" onclick="startScheduler()"><i class="fa-solid fa-play"></i> Start</button>
+                <button class="btn btn-danger"  onclick="stopScheduler()"><i class="fa-solid fa-stop"></i> Stop</button>
+                <button class="btn btn-primary" onclick="resetScheduler()"><i class="fa-solid fa-rotate-right"></i> Reset</button>
+              </div>
+
+              <div id="running-indicator" class="running-indicator" style="display:none;">
+                <div class="cpu-pulse"></div>
+                Running: <span id="running-proc-name">—</span>
+              </div>
+              <div id="waiting-indicator" class="waiting-indicator" style="display:none;">
+                <div class="io-pulse"></div>
+                I/O Wait: <span id="waiting-proc-names">—</span>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- Utilization + Gantt -->
+        <div class="grid-2">
+
+          <div class="panel">
+            <div class="panel-header">
+              <i class="fa-solid fa-microchip panel-icon"></i>
+              <span class="panel-title">CPU UTILIZATION</span>
+            </div>
+            <div class="panel-body">
+              <div class="cpu-ring-wrap">
+                <div class="cpu-ring">
+                  <svg viewBox="0 0 120 120">
+                    <circle class="cpu-ring-bg"   cx="60" cy="60" r="54"/>
+                    <circle class="cpu-ring-fill" id="cpu-ring-fill2" cx="60" cy="60" r="54"/>
+                  </svg>
+                  <div class="cpu-ring-text">
+                    <span id="cpu-ring-val2">0%</span>
+                    <span class="cpu-ring-label">UTILIZATION</span>
+                  </div>
+                </div>
+              </div>
+              <div class="flex-row" style="margin-top:12px;justify-content:center;">
+                <span class="text-dim">Idle: <span id="sched-idle">0</span>ms</span>
+                <span class="text-dim">Active: <span id="sched-active">0</span>ms</span>
+                <span class="text-dim">Done: <span id="sched-done">0</span></span>
+                <span class="text-dim">I/O Events: <span id="sched-io">0</span></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <i class="fa-solid fa-timeline panel-icon"></i>
+              <span class="panel-title">GANTT CHART</span>
+              <span class="text-dim" style="margin-left:auto;font-size:.6rem;">
+                ■ Running &nbsp; ■ I/O Wait &nbsp; ■ Idle
+              </span>
+            </div>
+            <div class="panel-body">
+              <div class="gantt-wrap">
+                <div class="gantt-bar-area" id="gantt-bars"></div>
+                <div class="gantt-times"    id="gantt-times"></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Execution log -->
+        <div class="panel">
+          <div class="panel-header">
+            <i class="fa-solid fa-scroll panel-icon"></i>
+            <span class="panel-title">EXECUTION LOG</span>
+          </div>
+          <div class="panel-body">
+            <div class="log-terminal" id="sched-log"></div>
+          </div>
+        </div>
+
+      </div><!-- /view-scheduler -->
+
+
+      <!-- ══════════════════════════════════════════
+           VIEW: MEMORY MANAGEMENT
+           ══════════════════════════════════════════ -->
+      <div class="view" id="view-memory">
+
+        <div class="grid-4">
+          <div class="stat-card">
+            <div class="stat-label">TOTAL RAM</div>
+            <div class="stat-value">1024<span style="font-size:.7rem">MB</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">USED</div>
+            <div class="stat-value" id="mem-used-val">0<span style="font-size:.7rem">MB</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">FREE</div>
+            <div class="stat-value" style="color:var(--neon-green)" id="mem-free-val">1024<span style="font-size:.7rem">MB</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">FRAGMENTATION</div>
+            <div class="stat-value" style="color:var(--electric-red)" id="mem-frag-val">0<span style="font-size:.7rem">%</span></div>
+          </div>
+        </div>
+
+        <!-- Memory map -->
+        <div class="panel">
+          <div class="panel-header">
+            <i class="fa-solid fa-server panel-icon"></i>
+            <span class="panel-title">MEMORY MAP — 1024 MB (First Fit Allocation)</span>
+          </div>
+          <div class="panel-body">
+            <div class="mem-grid" id="mem-grid"></div>
+            <div class="flex-row" style="margin-top:14px;">
+              <span class="text-dim" style="display:flex;align-items:center;gap:6px;">
+                <span style="display:inline-block;width:12px;height:12px;background:rgba(0,212,255,.2);border:1px solid rgba(0,212,255,.3);border-radius:2px;"></span> Free
+              </span>
+              <span class="text-dim" style="display:flex;align-items:center;gap:6px;">
+                <span style="display:inline-block;width:12px;height:12px;background:rgba(0,255,136,.3);border:1px solid rgba(0,255,136,.4);border-radius:2px;"></span> Allocated
+              </span>
+            </div>
+            <div class="storage-bar" style="margin-top:12px;">
+              <div class="storage-bar-fill" id="mem-bar" style="width:0%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Allocation table -->
+        <div class="panel">
+          <div class="panel-header">
+            <i class="fa-solid fa-list panel-icon"></i>
+            <span class="panel-title">ALLOCATION TABLE</span>
+          </div>
+          <div class="panel-body" style="padding:0;">
+            <div style="overflow-x:auto;">
+              <table class="proc-table">
+                <thead>
+                  <tr>
+                    <th>SEGMENT</th><th>PROCESS</th><th>START</th><th>END</th><th>SIZE</th><th>STATUS</th>
+                  </tr>
+                </thead>
+                <tbody id="mem-table"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /view-memory -->
+
+
+      <!-- ══════════════════════════════════════════
+           VIEW: FILE SYSTEM
+           ══════════════════════════════════════════ -->
+      <div class="view" id="view-filesystem">
+
+        <div class="grid-2">
+
+          <!-- Operations panel -->
+          <div class="panel">
+            <div class="panel-header">
+              <i class="fa-solid fa-file-plus panel-icon"></i>
+              <span class="panel-title">FILE OPERATIONS</span>
+            </div>
+            <div class="panel-body">
+              <div class="form-group">
+                <label class="form-label">File Name</label>
+                <input class="form-control" id="fs-name" placeholder="e.g. data.txt">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Content</label>
+                <textarea class="form-control" id="fs-content" placeholder="File content..." rows="3"></textarea>
+              </div>
+              <div class="flex-row" style="margin-top:8px;">
+                <button class="btn btn-primary" onclick="fsCreate()"><i class="fa-solid fa-plus"></i> Create</button>
+                <button class="btn btn-success" onclick="fsWrite()"><i class="fa-solid fa-pen"></i> Write</button>
+                <button class="btn btn-primary btn-sm" onclick="fsRead()"><i class="fa-solid fa-eye"></i> Read</button>
+              </div>
+              <div class="glow-sep"></div>
+              <div class="form-group">
+                <div class="form-label">READ RESULT</div>
+                <div id="fs-read-result"
+                     style="font-family:'Share Tech Mono';font-size:.72rem;color:var(--neon-green);
+                            min-height:30px;padding:8px;background:rgba(0,0,0,.3);
+                            border-radius:4px;border:1px solid rgba(0,255,136,.15);">
+                  — no read yet —
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Storage metrics -->
+          <div class="panel">
+            <div class="panel-header">
+              <i class="fa-solid fa-chart-pie panel-icon"></i>
+              <span class="panel-title">STORAGE METRICS</span>
+            </div>
+            <div class="panel-body">
+              <div class="stat-card" style="margin-bottom:12px;">
+                <div class="stat-label">TOTAL FILES</div>
+                <div class="stat-value" id="fs-total-files">0</div>
+              </div>
+              <div class="form-label" style="margin-bottom:6px;">STORAGE USED</div>
+              <div class="storage-bar">
+                <div class="storage-bar-fill" id="fs-storage-bar" style="width:0%"></div>
+              </div>
+              <div class="flex-row" style="margin-top:8px;">
+                <span class="text-dim">Used: <span class="text-neon" id="fs-used-bytes">0 B</span></span>
+                <span class="text-dim">Limit: <span>1 MB</span></span>
+              </div>
+              <div class="canvas-wrap" style="height:130px;margin-top:12px;">
+                <canvas id="fs-chart"></canvas>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Directory listing -->
+        <div class="panel">
+          <div class="panel-header">
+            <i class="fa-solid fa-folder-open panel-icon"></i>
+            <span class="panel-title">VIRTUAL DIRECTORY — /root/</span>
+          </div>
+          <div class="panel-body">
+            <div class="file-list" id="file-list">
+              <span class="text-dim">No files yet.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Inode table -->
+        <div class="panel">
+          <div class="panel-header">
+            <i class="fa-solid fa-table panel-icon"></i>
+            <span class="panel-title">INODE TABLE</span>
+          </div>
+          <div class="panel-body" style="padding:0;">
+            <table class="inode-table">
+              <thead>
+                <tr>
+                  <th>INODE</th><th>FILENAME</th><th>SIZE</th><th>PERMS</th>
+                  <th>CREATED</th><th>MODIFIED</th><th>BLOCKS</th>
+                </tr>
+              </thead>
+              <tbody id="inode-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div><!-- /view-filesystem -->
+
+
+      <!-- ══════════════════════════════════════════
+           VIEW: EVENT LOGGER
+           ══════════════════════════════════════════ -->
+      <div class="view" id="view-logger">
+        <div class="panel">
+          <div class="panel-header">
+            <i class="fa-solid fa-terminal panel-icon"></i>
+            <span class="panel-title">SYSTEM EVENT LOGGER</span>
+            <div style="margin-left:auto;display:flex;gap:8px;">
+              <button class="btn btn-sm btn-danger"  onclick="clearLog()"><i class="fa-solid fa-trash"></i> Clear</button>
+              <button class="btn btn-sm btn-primary" onclick="exportLog()"><i class="fa-solid fa-download"></i> Export</button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="log-terminal" id="main-log" style="height:60vh;"></div>
+          </div>
+        </div>
+      </div><!-- /view-logger -->
+
+    </main><!-- /main-content -->
+  </div><!-- /app-body -->
+</div><!-- /app -->
+
+
+<!-- ══════════════════════════════════════════════════
+     FILE CONTENT MODAL
+     ══════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="file-modal">
+  <div class="modal">
+    <div class="modal-title">
+      <i class="fa-solid fa-file-lines" style="margin-right:8px;"></i>FILE CONTENT
+    </div>
+    <div class="form-label" id="modal-filename"></div>
+    <div id="modal-content"
+         style="margin-top:10px;background:rgba(0,0,0,.4);padding:14px;border-radius:6px;
+                font-family:'Share Tech Mono';font-size:.75rem;color:var(--neon-green);
+                min-height:80px;border:1px solid rgba(0,255,136,.15);">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeModal('file-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Our JavaScript (loaded last so DOM is ready) -->
+<script src="kernel-sim.js"></script>
+
+</body>
+</html>
